@@ -222,7 +222,7 @@
         <div class="status"><span class="dot"></span> 模块已加载</div>
         <p class="meta">
           作者：<b>FenXY</b><br>
-          版本：<b>v1.0.3</b><br>
+          版本：<b>v1.0.4</b><br>
           USB 调试：<b id="adbStatus">读取中…</b><br>
           型号：<b id="devModel">读取中…</b><br>
           Android：<b id="devAndroid">读取中…</b><br>
@@ -274,7 +274,7 @@
 
     <section id="page-about" class="page">
       <h1>关于作者</h1>
-      <div class="sub">FenTOOL · v1.0.3</div>
+      <div class="sub">FenTOOL · v1.0.4</div>
 
       <div class="card" style="text-align:center;padding:32px 18px;">
         <img src="author.png" alt="" style="width:88px;height:88px;border-radius:50%;object-fit:cover;box-shadow:0 4px 16px rgba(0,0,0,.4);margin-bottom:12px;">
@@ -292,7 +292,7 @@
         <div class="status">关于模块</div>
         <p class="meta">
           名称：<b>FenTOOL</b><br>
-          版本：<b>v1.0.3</b><br>
+          版本：<b>v1.0.4</b><br>
           作者：<b>FenXY</b><br>
           兼容：<b>APatch / KernelSU / SukiSU Ultra</b>
         </p>
@@ -783,7 +783,7 @@ async function cleanGame(pkg, name){
     '  EXT=/storage/emulated/$U/Android/data/$PKG\n' +
     '  [ -d "$EXT" ] && rm -rf "$EXT/"* 2>/dev/null\n' +
     'done\n' +
-    'rm -rf /data//tmp/* 2>/dev/null\n' +
+    'rm -rf /data/tmp/* 2>/dev/null\n' +
     'rm -rf /data/system/dropbox/* 2>/dev/null\n' +
     'echo 16384 > /proc/sys/fs/inotify/max_queued_events 2>/dev/null\n' +
     'echo 128 > /proc/sys/fs/inotify/max_user_instances 2>/dev/null\n' +
@@ -951,8 +951,8 @@ loop();
 
 /* ================= 云更新（强制） ================= */
 const UPDATE_CONFIG = {
-  versionUrl: 'https://cdn.jsdelivr.net/gh/FXY67829/fentool-web@main/version.json',
-  localVersion: '1.0.3',
+  versionUrl: 'https://fxy67829.github.io/fentool-web/version.json',
+  localVersion: '1.0.4',
   webrootPath: '/data/adb/modules/FenTOOLTK/webroot/index.html'
 };
 
@@ -997,10 +997,30 @@ async function doUpdate(info, btn){
     const html = await r.text();
     btn.textContent = '写入中…';
 
+    // 转 base64
     const b64 = btoa(unescape(encodeURIComponent(html)));
-    const cmd = 'echo "' + b64 + '" | base64 -d > "' + UPDATE_CONFIG.webrootPath + '" && echo UPDATE_OK';
 
+    // 临时文件路径（用时间戳避免冲突）
+    const tmp = '/data/local/tmp/.ft_upd_' + Date.now();
+
+    // 1. 清空临时文件
+    await runCmd('rm -f "' + tmp + '"; : > "' + tmp + '"');
+
+    // 2. 分块写入（每块 8000 字符）
+    const chunkSize = 8000;
+    const total = b64.length;
+    for (let i = 0; i < total; i += chunkSize){
+      const chunk = b64.slice(i, i + chunkSize);
+      await runCmd('echo -n "' + chunk + '" >> "' + tmp + '"');
+      // 更新按钮显示进度
+      const pct = Math.min(99, Math.round((i + chunkSize) / total * 100));
+      btn.textContent = '写入中… ' + pct + '%';
+    }
+
+    // 3. 解码覆盖
+    const cmd = 'base64 -d "' + tmp + '" > "' + UPDATE_CONFIG.webrootPath + '" && rm -f "' + tmp + '" && echo UPDATE_OK';
     const out = await runCmd(cmd);
+
     if (out && String(out).indexOf('UPDATE_OK') !== -1){
       btn.textContent = '更新成功 ✅';
       addLog('WebUI 已更新到 v' + info.version, 'w');
