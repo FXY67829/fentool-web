@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>模块控制台</title>
+<style>
+  :root{
+    --glass-bg: rgba(255,255,255,0.06);
+    --glass-brd: rgba(255,255,255,0.30);
+    --glass-hi: rgba(255,255,255,0.70);
+    --txt: #eef3ff;
+    --txt-dim: rgba(238,243,255,0.60);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html{ background:#0b1a30; margin:0; height:100%; }
+  html,body{
+    margin:0; height:100%;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    color:var(--txt);
+    overflow:hidden;
+    background-color:#0b1a30;
+  }
+  body{ background: url('bg.jpg') center center / cover no-repeat fixed; }
+  body::after{
+    content:""; position:fixed; inset:0; z-index:-1;
+    background:rgba(0,0,20,.35); pointer-events:none;
+  }
+  #snow{ position:fixed; inset:0; z-index:50; pointer-events:none; }
+
+  .app{ position:relative; z-index:3; height:100%; display:flex; flex-direction:column; }
+  .page-wrap{
+    flex:1; overflow-y:auto;
+    padding:calc(env(safe-area-inset-top) + 26px) 18px 200px 18px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .page{ display:none; animation:fade .3s ease; }
+  .page.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+
+  h1{
+    font-size:22px; margin:0 0 4px; letter-spacing:.5px; font-weight:700;
+    background:linear-gradient(100deg,#fff,#cfe6ff 60%,#e8f4ff);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub{ color:var(--txt-dim); font-size:13px; margin-bottom:20px; letter-spacing:.3px; }
+
+  .card{
+    position:relative; background:var(--glass-bg); border:1px solid var(--glass-brd);
+    border-radius:22px; padding:18px; margin-bottom:14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25); overflow:hidden;
+  }
+  .status{ display:flex; align-items:center; gap:10px; font-size:15px; font-weight:600; }
+  .meta{ color:var(--txt-dim); font-size:13px; margin:10px 0 0; line-height:1.7; }
+  .meta b{ color:#fff; font-weight:600; }
+
+  .dot{ position:relative; width:9px; height:9px; border-radius:50%;
+    background:#3ddc84; box-shadow:0 0 10px #3ddc84;
+    animation:breathe 2s ease-in-out infinite; }
+  .dot::after{ content:""; position:absolute; left:50%; top:50%; width:100%; height:100%;
+    border-radius:50%; background:#3ddc84; transform:translate(-50%,-50%);
+    animation:ripple 2s ease-out infinite; pointer-events:none; }
+  @keyframes breathe{ 0%,100%{opacity:.6;box-shadow:0 0 6px #3ddc84;} 50%{opacity:1;box-shadow:0 0 16px #3ddc84,0 0 24px rgba(61,220,132,.6);} }
+  @keyframes ripple{ 0%{transform:translate(-50%,-50%) scale(1);opacity:.7;} 100%{transform:translate(-50%,-50%) scale(2.6);opacity:0;} }
+
+  .btn{ position:relative; display:block; width:100%; margin-top:14px; padding:15px;
+    border-radius:17px; border:1px solid rgba(255,255,255,.45);
+    background:linear-gradient(135deg, rgba(255,255,255,.04), rgba(20,40,70,.06));
+    color:#fff; font-size:15px; font-weight:600; letter-spacing:.4px;
+    text-shadow: 0 1px 3px rgba(0,0,0,.85); box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    transition: transform .12s ease, background .2s ease; cursor:pointer; overflow:hidden; }
+  .btn:active{ transform:scale(.97);
+    background:linear-gradient(135deg, rgba(255,255,255,.18), rgba(40,80,140,.20)); }
+
+  .input{ width:100%; padding:14px 16px; border-radius:14px;
+    border:1px solid rgba(255,255,255,.35); background:rgba(0,0,0,.30);
+    color:#fff; font-size:14px; font-family:ui-monospace,Menlo,Consolas,monospace;
+    outline:none; transition: border-color .2s ease, background .2s ease; }
+  .input:focus{ border-color:rgba(120,200,255,.85); background:rgba(0,0,0,.45); }
+  .input::placeholder{ color:rgba(238,243,255,.35); }
+
+  .log{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; line-height:1.7;
+    color:#c8f7d4; white-space:pre-wrap; word-break:break-all;
+    background:rgba(0,0,0,.32); border:1px solid rgba(255,255,255,.14);
+    border-radius:16px; padding:14px; min-height:240px; }
+  .log .t{ color:#7e9bff; } .log .w{ color:#ffd479; } .log .e{ color:#ff8f8f; }
+
+  .modal-mask{ display:none; position:fixed; inset:0; background:rgba(0,0,0,.55);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    z-index:200; align-items:center; justify-content:center; padding:20px; }
+  .modal-mask.active{ display:flex; }
+  .modal{ width:100%; max-width:420px; max-height:80vh;
+    display:flex; flex-direction:column;
+    background:linear-gradient(135deg, rgba(40,60,90,.85), rgba(20,30,50,.90));
+    border:1px solid rgba(255,255,255,.35); border-radius:22px;
+    backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: 0 20px 60px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.75);
+    overflow:hidden; animation:modalIn .28s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes modalIn{ from{transform:scale(.9);opacity:0;} to{transform:scale(1);opacity:1;} }
+  .modal-title{ padding:18px 20px 12px; font-size:16px; font-weight:700; color:#fff;
+    border-bottom:1px solid rgba(255,255,255,.12); }
+  .modal-body{ flex:1; overflow-y:auto; padding:14px 20px; -webkit-overflow-scrolling:touch; }
+  .modal-footer{ padding:12px 20px 18px; border-top:1px solid rgba(255,255,255,.12);
+    display:flex; gap:10px; }
+  .modal-footer .btn{ margin-top:0; flex:1; }
+
+  .nav{ position:fixed; left:50%; transform:translateX(-50%);
+    bottom:calc(env(safe-area-inset-bottom) + 14px); z-index:60;
+    display:flex; align-items:center; gap:4px; padding:5px;
+    border-radius:22px;
+    background:linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
+    border:1px solid rgba(255,255,255,.45);
+    backdrop-filter: blur(6px) saturate(140%); -webkit-backdrop-filter: blur(6px) saturate(140%);
+    box-shadow: 0 12px 36px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.85),
+      inset 0 -1px 0 rgba(255,255,255,.15);
+    overflow:hidden; }
+  .nav-indicator{ position:absolute; top:5px; left:5px; height:calc(100% - 10px);
+    width:62px; border-radius:18px;
+    background:linear-gradient(135deg, rgba(255,255,255,.55), rgba(200,225,250,.42));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.85), 0 6px 18px rgba(120,180,255,.35);
+    transition: transform .42s cubic-bezier(.34,1.56,.64,1),
+                width .42s cubic-bezier(.34,1.56,.64,1);
+    z-index:0; pointer-events:none; }
+  .nav-item{ position:relative; z-index:1;
+    display:flex; flex-direction:row; align-items:center; justify-content:center;
+    gap:4px; min-width:62px; padding:8px 10px; border-radius:18px;
+    color:var(--txt-dim); font-size:11px; font-weight:600; letter-spacing:.2px;
+    cursor:pointer; user-select:none; transition: color .24s ease;
+    white-space:nowrap; flex-shrink:0; }
+  .nav-item span{ white-space:nowrap; display:inline-block; }
+  .nav-item svg{ width:16px; height:16px; stroke:currentColor; fill:none;
+    stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  .nav-item.active{ color:#fff; }
+
+  /* ============ 云更新弹窗（居中公告型） ============ */
+  .update-overlay{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,.65);
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+    z-index:500; display:none;
+    align-items:center; justify-content:center;
+    padding:24px; animation:fadeIn .25s ease;
+  }
+  .update-overlay.active{ display:flex; }
+  @keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
+
+  .update-sheet{
+    width:100%; max-width:420px; max-height:70vh;
+    background:linear-gradient(180deg, rgba(30,45,70,.98), rgba(15,25,42,.99));
+    border:1px solid rgba(120,170,255,.35); border-radius:18px;
+    box-shadow: 0 24px 80px rgba(0,0,0,.75),
+      0 0 0 1px rgba(255,255,255,.06),
+      inset 0 1px 0 rgba(255,255,255,.15);
+    display:flex; flex-direction:column; overflow:hidden;
+    animation:popIn .3s cubic-bezier(.34,1.56,.64,1);
+  }
+  @keyframes popIn{ from{transform:scale(.85);opacity:0;} to{transform:scale(1);opacity:1;} }
+
+  .update-header{
+    padding:14px 18px;
+    background:linear-gradient(180deg, rgba(80,130,220,.35), rgba(50,80,150,.15));
+    border-bottom:1px solid rgba(120,170,255,.25);
+    display:flex; align-items:center; gap:10px; flex-shrink:0;
+  }
+  .update-header .update-icon{
+    width:32px; height:32px; border-radius:8px;
+    background:linear-gradient(135deg,#4da3ff,#7e5cff);
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; box-shadow:0 4px 12px rgba(100,140,255,.5); flex-shrink:0;
+  }
+  .update-header .update-title{
+    font-size:15px; font-weight:700; color:#fff;
+    margin:0; letter-spacing:.5px;
+  }
+  .update-header .update-badge{
+    margin-left:auto; font-size:10px; font-weight:700;
+    padding:3px 8px; border-radius:8px;
+    background:rgba(61,220,132,.18); color:#3ddc84;
+    border:1px solid rgba(61,220,132,.4); letter-spacing:.5px;
+  }
+  .update-ver{
+    padding:12px 18px 8px;
+    font-size:12px; color:rgba(238,243,255,.7);
+    font-family:ui-monospace,Menlo,Consolas,monospace;
+    border-bottom:1px dashed rgba(255,255,255,.08); flex-shrink:0;
+  }
+  .update-ver .new{ color:#3ddc84; font-weight:700; font-size:13px; }
+  .update-log{
+    flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    font-size:12px; line-height:1.8; color:#c8f7d4;
+    white-space:pre-wrap; word-break:break-word;
+    background:rgba(0,0,0,.45); padding:14px 18px; margin:0;
+    font-family:ui-monospace,Menlo,Consolas,monospace;
+    min-height:120px; max-height:240px;
+  }
+  .update-footer{ padding:14px 18px;
+    border-top:1px solid rgba(120,170,255,.25); flex-shrink:0; }
+  .update-btn{
+    width:100%; padding:13px; border-radius:12px; border:none;
+    background:linear-gradient(135deg,#4da3ff,#7e5cff);
+    color:#fff; font-size:14px; font-weight:700; letter-spacing:.5px;
+    box-shadow:0 6px 20px rgba(100,140,255,.45);
+    transition:transform .12s ease, opacity .2s ease; cursor:pointer;
+  }
+  .update-btn:active{ transform:scale(.97); }
+  .update-btn:disabled{ opacity:.6; cursor:not-allowed; }
+</style>
+</head>
+<body>
+
+<canvas id="snow"></canvas>
+
+<div class="app">
+  <div class="page-wrap">
+
+    <section id="page-home" class="page active">
+      <h1>FenTOOL</h1>
+      <div class="sub">APatch / KernelSU / SukiSU Ultra 通用</div>
+
+      <div class="card">
+        <div class="status"><span class="dot"></span> 模块已加载</div>
+        <p class="meta">
+          作者：<b>FenXY</b><br>
+          版本：<b>v1.0.2</b><br>
+          USB 调试：<b id="adbStatus">读取中…</b><br>
+          型号：<b id="devModel">读取中…</b><br>
+          Android：<b id="devAndroid">读取中…</b><br>
+          BL 状态：<b id="blStatus">读取中…</b><br>
+          CPU 温度：<b id="cpuTemp">读取中…</b>
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="status">快捷操作</div>
+        <button class="btn" onclick="openPatchModal()">🛡️ 更新安全补丁</button>
+        <button class="btn" onclick="setMt2Path()">📁 切换 MT2 目录</button>
+        <button class="btn" onclick="openUninstallModal()">🗑️ 删除指定应用</button>
+        <button class="btn" onclick="closeAdb()">🔌 关闭 USB 调试</button>
+      </div>
+    </section>
+
+    <section id="page-apps" class="page">
+      <h1>游戏清理</h1>
+      <div class="sub">点击按钮执行清理</div>
+
+      <div class="card">
+        <div class="status"><span class="dot"></span> 清理面板</div>
+        <p class="meta">点击下方按钮开始清理对应游戏数据</p>
+      </div>
+
+      <div class="card">
+        <div class="status">⚡ 快捷清理</div>
+        <button class="btn" onclick="cleanGame('com.tencent.tmgp.dfm', '🎯 三角洲行动')">🎯 三角洲行动</button>
+        <button class="btn" onclick="cleanGame('com.tencent.tmgp.sgame', '⚔️ 王者荣耀')">⚔️ 王者荣耀</button>
+        <button class="btn" onclick="cleanGame('com.tencent.mf.uam', '🏹 暗区突围')">🏹 暗区突围</button>
+        <button class="btn" onclick="cleanGame('com.sofunny.Sausage', '🌭 香肠派对')">🌭 香肠派对</button>
+        <button class="btn" onclick="cleanGame('com.tencent.tmgp.pubgmhd', '🔫 和平精英')">🔫 和平精英</button>
+        <button class="btn" onclick="cleanGame('com.tencent.rmcn', '🧬 失控进化')">🧬 失控进化</button>
+        <button class="btn" onclick="cleanGame('com.minitech.miniworld', '🌍 迷你世界')">🌍 迷你世界</button>
+        <button class="btn" onclick="cleanGame('com.tencent.ig', '🎮 PUBG Mobile')">🎮 PUBG Mobile</button>
+        <button class="btn" onclick="cleanGame('com.tencent.tmgp.codev', '🎯 无畏契约')">🎯 无畏契约</button>
+      </div>
+    </section>
+
+    <section id="page-log" class="page">
+      <h1>运行日志</h1>
+      <div class="sub">实时输出</div>
+      <div class="card">
+        <div class="log" id="logBox"><span class="t">[init]</span> 模块已加载
+<span class="t">[init]</span> 等待操作…</div>
+      </div>
+    </section>
+
+    <section id="page-about" class="page">
+      <h1>关于作者</h1>
+      <div class="sub">FenTOOL · v1.0.2</div>
+
+      <div class="card" style="text-align:center;padding:32px 18px;">
+        <img src="author.png" alt="" style="width:88px;height:88px;border-radius:50%;object-fit:cover;box-shadow:0 4px 16px rgba(0,0,0,.4);margin-bottom:12px;">
+        <div style="font-size:22px;font-weight:700;color:#fff;letter-spacing:1px;">FenXY</div>
+        <div style="font-size:13px;color:var(--txt-dim);margin-top:6px;">摸鱼摸到底</div>
+      </div>
+
+      <div class="card">
+        <div class="status">联系方式</div>
+        <p class="meta">QQ：<b>3123157507</b></p>
+        <button class="btn" onclick="openQQ()">💬 点击添加好友</button>
+      </div>
+
+      <div class="card">
+        <div class="status">关于模块</div>
+        <p class="meta">
+          名称：<b>FenTOOL</b><br>
+          版本：<b>v1.0.2</b><br>
+          作者：<b>FenXY</b><br>
+          兼容：<b>APatch / KernelSU / SukiSU Ultra</b>
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="status">致谢</div>
+        <p class="meta">感谢使用本模块的每一位用户，有你的支持我才能一直开发更新下去</p>
+      </div>
+
+      <p style="text-align:center;color:var(--txt-dim);font-size:12px;margin-top:20px;">
+        © 2025 FenXY · All Rights Reserved
+      </p>
+    </section>
+
+  </div>
+
+  <nav class="nav">
+    <div class="nav-indicator"></div>
+    <div class="nav-item active" data-page="page-home">
+      <svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+      <span>主页</span>
+    </div>
+    <div class="nav-item" data-page="page-apps">
+      <svg viewBox="0 0 24 24"><path d="M5 7h14"/><path d="M5 12h14"/><path d="M5 17h9"/></svg>
+      <span>清理</span>
+    </div>
+    <div class="nav-item" data-page="page-log">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h10"/></svg>
+      <span>日志</span>
+    </div>
+    <div class="nav-item" data-page="page-about">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 12h1v4h1"/></svg>
+      <span>关于</span>
+    </div>
+  </nav>
+</div>
+<!-- 云更新弹窗（居中公告型） -->
+<div class="update-overlay" id="updateOverlay">
+  <div class="update-sheet">
+    <div class="update-header">
+      <div class="update-icon">📢</div>
+      <h2 class="update-title">系统公告 · 发现新版本</h2>
+      <span class="update-badge">NEW</span>
+    </div>
+    <div class="update-ver">
+      当前版本 v<span id="updateOldVer">—</span>
+      &nbsp;→&nbsp;
+      <span class="new">最新版本 v<span id="updateNewVer">—</span></span>
+    </div>
+    <pre class="update-log" id="updateChangelog">—</pre>
+    <div class="update-footer">
+      <button class="update-btn" id="updateBtn">立即更新</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="patchMask">
+  <div class="modal">
+    <div class="modal-title">选择补丁方案</div>
+    <div class="modal-body">
+      <p class="meta" style="margin-bottom:14px">请选择生成 security_patch.txt 的模式：</p>
+      <button class="btn" onclick="applyPatch(1)">方案一：标准补丁日期</button>
+      <button class="btn" onclick="applyPatch(2)">方案二：vendor=prop</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closePatchModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="uninstallMask">
+  <div class="modal">
+    <div class="modal-title">删除指定应用</div>
+    <div class="modal-body">
+      <p class="meta" style="margin-bottom:14px">请输入要删除的应用包名：</p>
+      <input class="input" id="pkgInput" type="text" placeholder="例如：com.example.app" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeUninstallModal()">取消</button>
+      <button class="btn" onclick="confirmUninstall()">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="confirmMask">
+  <div class="modal">
+    <div class="modal-title">二次确认</div>
+    <div class="modal-body">
+      <p class="meta" id="confirmText">确定要卸载该应用吗？此操作不可恢复。</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConfirmModal()">取消</button>
+      <button class="btn" onclick="doUninstall()">确定卸载</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="cleanMask">
+  <div class="modal">
+    <div class="modal-title" id="resultTitle">提示</div>
+    <div class="modal-body" id="cleanBody">执行中…</div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCleanModal()">关闭</button>
+    </div>
+  </div>
+</div>
+<script>
+/* ================= 工具 ================= */
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[m]);
+}
+
+/* ================= 导航 ================= */
+const navEl     = document.querySelector('.nav');
+const navItems  = document.querySelectorAll('.nav-item');
+const indicator = document.querySelector('.nav-indicator');
+
+function moveIndicator(el){
+  const navRect = navEl.getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  indicator.style.width = r.width + 'px';
+  indicator.style.transform = 'translateX(' + (r.left - navRect.left - 5) + 'px)';
+}
+navItems.forEach(item=>{
+  item.addEventListener('click', ()=>{
+    navItems.forEach(i=>i.classList.remove('active'));
+    item.classList.add('active');
+    moveIndicator(item);
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById(item.dataset.page).classList.add('active');
+  });
+});
+window.addEventListener('load', ()=>{
+  moveIndicator(document.querySelector('.nav-item.active'));
+  detectEnv();
+});
+window.addEventListener('resize', ()=>{
+  moveIndicator(document.querySelector('.nav-item.active'));
+});
+
+/* ================= 日志 ================= */
+const logBox = document.getElementById('logBox');
+function addLog(msg, type){
+  const t = new Date().toTimeString().slice(0,8);
+  const cls = type === 'w' ? 'w' : type === 'e' ? 'e' : 't';
+  const span = document.createElement('span');
+  span.className = cls;
+  logBox.appendChild(document.createTextNode('\n'));
+  logBox.appendChild(span).textContent = '[' + t + ']';
+  logBox.appendChild(document.createTextNode(' ' + msg));
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+/* ================= 环境探测 ================= */
+let EXEC_FN = null;
+function detectEnv(){
+  const names = ['ksu', 'ap', 'kernelsu', 'ksuwebui'];
+  for (const n of names){
+    if (window[n] && typeof window[n].exec === 'function'){
+      EXEC_FN = window[n].exec.bind(window[n]);
+      addLog('已检测到执行接口：window.' + n + '.exec', 'w');
+      refreshAdbStatus(); refreshDeviceInfo(); refreshCpuTemp();
+      return;
+    }
+  }
+  for (const k in window){
+    try{
+      if (window[k] && typeof window[k].exec === 'function'){
+        EXEC_FN = window[k].exec.bind(window[k]);
+        addLog('已检测到执行接口：window.' + k + '.exec', 'w');
+        refreshAdbStatus(); refreshDeviceInfo(); refreshCpuTemp();
+        return;
+      }
+    }catch(e){}
+  }
+  addLog('未检测到可用 exec 接口', 'e');
+  const el = document.getElementById('adbStatus');
+  if (el) el.textContent = '未知';
+}
+
+async function runCmd(cmd){
+  if (!EXEC_FN) { addLog('执行环境不可用', 'e'); return null; }
+  try{
+    const r = EXEC_FN(cmd);
+    const out = (r && typeof r.then === 'function') ? await r : r;
+    return out;
+  }catch(e){
+    addLog('执行异常：' + e, 'e');
+    return null;
+  }
+}
+
+/* ================= 读取 USB 调试状态 ================= */
+async function refreshAdbStatus(){
+  const out = await runCmd('settings get global adb_enabled');
+  const el = document.getElementById('adbStatus');
+  if (!el) return;
+  if (out !== null && out !== undefined && String(out).trim() !== ''){
+    const v = String(out).trim();
+    el.textContent = (v === '1') ? '已开启' : (v === '0' ? '已关闭' : '未知');
+  } else {
+    el.textContent = '未知';
+  }
+}
+
+/* ================= 读取设备信息 ================= */
+async function refreshDeviceInfo(){
+  const brand   = await runCmd('getprop ro.product.brand');
+  const market  = await runCmd('getprop ro.product.marketname');
+  const model   = await runCmd('getprop ro.product.model');
+  const android = await runCmd('getprop ro.build.version.release');
+  const vbs     = await runCmd('getprop ro.boot.verifiedbootstate');
+  const locked  = await runCmd('getprop ro.boot.flash.locked');
+
+  const trim = v => (v !== null && v !== undefined) ? String(v).trim() : '';
+  const B  = trim(brand);
+  const M  = trim(market);
+  const MO = trim(model);
+
+  let modelText = '未知';
+  if (B && MO && M){ modelText = B + ' ' + M + ' (' + MO + ')'; }
+  else if (B && MO){ modelText = B + ' ' + MO; }
+  else if (MO){ modelText = MO; }
+
+  const setEl = (id, val)=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val ? val : '未知';
+  };
+
+  setEl('devModel',   modelText);
+  setEl('devAndroid', trim(android));
+
+  const v = trim(vbs).toLowerCase();
+  const l = trim(locked);
+  let blText = '未知';
+  let blColor = '#ffd479';
+
+  if (v === 'green' || l === '1'){
+    blText = '已上锁 ✅'; blColor = '#3ddc84';
+  } else if (v === 'orange' || l === '0'){
+    blText = '已解锁 ⚠️'; blColor = '#ff5555';
+  } else if (v === 'yellow'){
+    blText = '已上锁（自定义密钥）';
+  } else if (v === 'red'){
+    blText = '校验失败'; blColor = '#ff5555';
+  }
+
+  const elBL = document.getElementById('blStatus');
+  if (elBL){
+    elBL.textContent = blText;
+    elBL.style.color = blColor;
+  }
+}
+
+/* ================= 读取 CPU 温度 ================= */
+async function refreshCpuTemp(){
+  const el = document.getElementById('cpuTemp');
+  if (!el) return;
+
+  const out = await runCmd(
+    'for z in /sys/class/thermal/thermal_zone*; do\n' +
+    '  t=$(cat $z/type 2>/dev/null)\n' +
+    '  case "$t" in\n' +
+    '    *cpu*|*soc*|*CPU*|*SOC*)\n' +
+    '      v=$(cat $z/temp 2>/dev/null)\n' +
+    '      echo "$t=$v"\n' +
+    '    ;;\n' +
+    '  esac\n' +
+    'done | head -n1\n'
+  );
+
+  if (out && String(out).trim()){
+    const s = String(out).trim();
+    const m = s.match(/=(\d+)/);
+    if (m){
+      let temp = parseInt(m[1]);
+      if (temp > 1000) temp = Math.round(temp / 1000);
+      let color = '#3ddc84';
+      if (temp >= 65)      color = '#ff5555';
+      else if (temp >= 50) color = '#ffd479';
+      el.textContent = temp + '°C';
+      el.style.color = color;
+      return;
+    }
+  }
+  el.textContent = '未知';
+}
+
+/* ================= 关闭 USB 调试 ================= */
+async function closeAdb(){
+  addLog('执行：关闭 USB 调试');
+  await runCmd('settings put global adb_enabled 0');
+  addLog('USB 调试已关闭', 'w');
+  const el = document.getElementById('adbStatus');
+  if (el) el.textContent = '已关闭';
+}
+
+/* ================= 更新安全补丁 ================= */
+function openPatchModal(){ document.getElementById('patchMask').classList.add('active'); }
+function closePatchModal(){ document.getElementById('patchMask').classList.remove('active'); }
+
+async function applyPatch(mode){
+  closePatchModal();
+  addLog('执行：更新安全补丁（方案 ' + mode + '）');
+  const vendorLine = (mode === 2) ? 'vendor=prop' : 'vendor=$PATCH_FULL';
+
+  const script =
+    'if [ ! -d /data/adb/tricky_store/ ]; then\n' +
+    '  echo "ERROR_NO_TRICKY_STORE"\n' +
+    '  exit 1\n' +
+    'fi\n' +
+    'PATCH_FULL=$(grep "^ro.build.version.security_patch=" /system/build.prop 2>/dev/null | cut -d"=" -f2)\n' +
+    '[ -z "$PATCH_FULL" ] && PATCH_FULL=$(grep "^ro.build.version.security_patch=" /system/system/build.prop 2>/dev/null | cut -d"=" -f2)\n' +
+    '[ -z "$PATCH_FULL" ] && PATCH_FULL="unknown"\n' +
+    'PATCH_YM=$(echo "$PATCH_FULL" | cut -d"-" -f1-2 | tr -d "-")\n' +
+    'OUT=/data/adb/tricky_store/security_patch.txt\n' +
+    '[ -f "$OUT" ] && mv "$OUT" "${OUT}.bak"\n' +
+    'echo "system=$PATCH_YM" > $OUT\n' +
+    'echo "boot=$PATCH_FULL" >> $OUT\n' +
+    'echo "' + vendorLine + '" >> $OUT\n' +
+    'cat $OUT\n';
+
+  const out = await runCmd(script);
+  const result = out ? String(out).trim() : '无返回';
+
+  document.getElementById('cleanMask').classList.add('active');
+  document.getElementById('resultTitle').textContent = '安全补丁';
+
+  const body = document.getElementById('cleanBody');
+  if (result.indexOf('ERROR_NO_TRICKY_STORE') !== -1){
+    body.innerHTML = '<b style="color:#ff8f8f">失败：未检测到 Tricky Store / TEESimulator 模块</b>';
+    addLog('安全补丁更新失败：未安装 Tricky Store', 'e');
+  } else {
+    body.innerHTML =
+      '<b style="color:#3ddc84">安全补丁已更新（方案 ' + mode + '）✅</b><br><br>' +
+      '<pre style="white-space:pre-wrap;font-size:12px;color:#c8f7d4;margin:0">' +
+      escapeHtml(result) + '</pre>';
+    addLog('安全补丁已更新（方案 ' + mode + '）', 'w');
+  }
+}
+
+/* ================= 切换 MT2 目录 ================= */
+async function setMt2Path(){
+  addLog('执行：切换 MT2 目录');
+  document.getElementById('cleanMask').classList.add('active');
+  document.getElementById('resultTitle').textContent = 'MT2 目录';
+  document.getElementById('cleanBody').innerHTML = '正在处理…';
+
+  const script =
+    'TARGET=/sdcard/xiaofen\n' +
+    'rm -rf /storage/emulated/0/MT2\n' +
+    'mkdir -p "$TARGET"\n' +
+    'CHANGED=0\n' +
+    'for XML in \\\n' +
+    '  /data/user/0/bin.mt.plus/shared_prefs/bin.mt.plus_preferences.xml \\\n' +
+    '  /data/user/0/bin.mt.plus.canary/shared_prefs/bin.mt.plus.canary_preferences.xml\n' +
+    'do\n' +
+    '  [ -f "$XML" ] || continue\n' +
+    '  if grep -q \'name="mt2_path"\' "$XML"; then\n' +
+    '    sed -i \'s|<string name="mt2_path">[^<]*</string>|<string name="mt2_path">/sdcard/xiaofen</string>|\' "$XML"\n' +
+    '  else\n' +
+    '    sed -i \'s|</map>|    <string name="mt2_path">/sdcard/xiaofen</string>\\n</map>|\' "$XML"\n' +
+    '  fi\n' +
+    '  echo "已修改：$XML"\n' +
+    '  CHANGED=1\n' +
+    'done\n' +
+    'if [ $CHANGED -eq 0 ]; then\n' +
+    '  echo "ERROR_NO_MT"\n' +
+    'else\n' +
+    '  am force-stop bin.mt.plus 2>/dev/null\n' +
+    '  am force-stop bin.mt.plus.canary 2>/dev/null\n' +
+    '  echo "OK"\n' +
+    'fi\n';
+
+  const out = await runCmd(script);
+  const result = out ? String(out).trim() : '无返回';
+
+  const body = document.getElementById('cleanBody');
+  if (result.indexOf('ERROR_NO_MT') !== -1){
+    body.innerHTML = '<b style="color:#ff8f8f">失败：未检测到已安装的 MT 管理器</b>';
+    addLog('MT2 目录切换失败：未检测到 MT 管理器', 'e');
+  } else {
+    body.innerHTML =
+      '<b style="color:#3ddc84">MT2 目录已切换为 /sdcard/xiaofen ✅</b><br><br>' +
+      '<div style="font-size:12px;color:#c8f7d4;white-space:pre-wrap">' +
+      escapeHtml(result) + '</div><br>' +
+      '<div style="font-size:12px;color:#ffd479">提示：请重新打开 MT 管理器生效</div>';
+    addLog('MT2 目录已切换为 /sdcard/xiaofen', 'w');
+  }
+}
+
+/* ================= 删除指定应用 ================= */
+let pendingPkg = '';
+
+function openUninstallModal(){
+  document.getElementById('pkgInput').value = '';
+  document.getElementById('uninstallMask').classList.add('active');
+  setTimeout(()=>{
+    document.getElementById('pkgInput').focus();
+  }, 100);
+}
+function closeUninstallModal(){
+  document.getElementById('uninstallMask').classList.remove('active');
+}
+
+function confirmUninstall(){
+  const pkg = document.getElementById('pkgInput').value.trim();
+  if (!pkg) return;
+  pendingPkg = pkg;
+  closeUninstallModal();
+
+  document.getElementById('confirmText').innerHTML =
+    '确定要卸载以下应用吗？<br><br>' +
+    '<b style="color:#fff;font-family:ui-monospace,monospace;word-break:break-all">' +
+    escapeHtml(pkg) + '</b><br><br>' +
+    '<span style="color:#ffd479">此操作不可恢复。</span>';
+  document.getElementById('confirmMask').classList.add('active');
+}
+function closeConfirmModal(){
+  document.getElementById('confirmMask').classList.remove('active');
+  pendingPkg = '';
+}
+
+async function doUninstall(){
+  const pkg = pendingPkg;
+  closeConfirmModal();
+  if (!pkg) return;
+
+  addLog('执行：卸载 ' + pkg);
+
+  document.getElementById('cleanMask').classList.add('active');
+  document.getElementById('resultTitle').textContent = '卸载应用';
+  document.getElementById('cleanBody').innerHTML = '正在卸载 ' + escapeHtml(pkg) + ' …';
+
+  const script =
+    'PKG=' + pkg + '\n' +
+    'if pm list packages | grep -q "^package:$PKG$"; then\n' +
+    '  pm uninstall "$PKG"\n' +
+    'else\n' +
+    '  echo "ERROR_NOT_FOUND"\n' +
+    'fi\n';
+
+  const out = await runCmd(script);
+  const result = out ? String(out).trim() : '无返回';
+
+  const body = document.getElementById('cleanBody');
+  if (result.indexOf('ERROR_NOT_FOUND') !== -1){
+    body.innerHTML = '<b style="color:#ff8f8f">失败：未找到该应用</b><br><br>' +
+      '<span style="font-size:12px;color:#c8f7d4">包名：' + escapeHtml(pkg) + '</span>';
+    addLog('卸载失败：未找到应用 ' + pkg, 'e');
+  } else if (result.indexOf('Success') !== -1){
+    body.innerHTML = '<b style="color:#3ddc84">已卸载 ✅</b><br><br>' +
+      '<span style="font-size:12px;color:#c8f7d4">包名：' + escapeHtml(pkg) + '</span>';
+    addLog('已卸载：' + pkg, 'w');
+  } else {
+    body.innerHTML = '<b style="color:#ffd479">卸载返回：</b><br><br>' +
+      '<pre style="white-space:pre-wrap;font-size:12px;color:#c8f7d4;margin:0">' +
+      escapeHtml(result) + '</pre>';
+    addLog('卸载返回：' + result, 'w');
+  }
+}
+
+/* ================= 游戏清理 ================= */
+async function cleanGame(pkg, name){
+  document.getElementById('cleanMask').classList.add('active');
+  document.getElementById('resultTitle').textContent = '清理';
+  const body = document.getElementById('cleanBody');
+  body.innerHTML = '正在清理 ' + escapeHtml(name) + ' …<br>请稍候…';
+
+  const script =
+    'USERS=$(ls /data/user 2>/dev/null | grep -E "^[0-9]+$" | sort -u)\n' +
+    'PKG=' + pkg + '\n' +
+    'for U in $USERS; do\n' +
+    '  D=/data/user/$U/$PKG\n' +
+    '  [ -d "$D" ] || continue\n' +
+    '  rm -rf "$D/cache/"* 2>/dev/null\n' +
+    '  rm -rf "$D/shared_prefs/"* 2>/dev/null\n' +
+    '  if [ -d "$D/files" ]; then\n' +
+    '    cd "$D/files" 2>/dev/null || continue\n' +
+    '    for I in *; do [ "$I" = "UE4Game" ] && continue; rm -rf "$I"; done\n' +
+    '  fi\n' +
+    '  rm -rf "$D/files/UE4Game/DeltaForce/Manifest_UFSFiles_Android.txt" 2>/dev/null\n' +
+    '  rm -rf "$D/files/UE4Game/DeltaForce/DeltaForce/Saved/LoadTrack" 2>/dev/null\n' +
+    '  EXT=/storage/emulated/$U/Android/data/$PKG\n' +
+    '  [ -d "$EXT" ] && rm -rf "$EXT/"* 2>/dev/null\n' +
+    'done\n' +
+    'rm -rf /data/local/tmp/* 2>/dev/null\n' +
+    'rm -rf /data/system/dropbox/* 2>/dev/null\n' +
+    'echo 16384 > /proc/sys/fs/inotify/max_queued_events 2>/dev/null\n' +
+    'echo 128 > /proc/sys/fs/inotify/max_user_instances 2>/dev/null\n' +
+    'echo 8192 > /proc/sys/fs/inotify/max_user_watches 2>/dev/null\n' +
+    'NEW_SERIAL=$(head -c 100 /dev/urandom | tr -dc "A-Za-z0-9" | head -c 12)\n' +
+    'resetprop ro.serialno "$NEW_SERIAL" 2>/dev/null\n' +
+    'NEW_AID=$(head -c 8 /dev/urandom | od -An -tx1 | tr -d " \\n")\n' +
+    'settings put secure android_id "$NEW_AID" 2>/dev/null\n' +
+    'rm -f /data/system/users/*/settings_ssaid.xml 2>/dev/null\n' +
+    'WLAN_IFACE=$(ip link 2>/dev/null | grep wlan | head -1 | awk -F": " \'{print $2}\' | tr -d " ")\n' +
+    '[ -z "$WLAN_IFACE" ] && WLAN_IFACE=wlan0\n' +
+    'NEW_MAC=$(head -c 100 /dev/urandom | tr -dc "A-Fa-f0-9" | head -c 12 | sed \'s/\\(..\\)/\\1:/g\' | sed \'s/:$//\')\n' +
+    'ip link set "$WLAN_IFACE" down 2>/dev/null\n' +
+    'ifconfig "$WLAN_IFACE" hw ether "$NEW_MAC" 2>/dev/null\n' +
+    'ip link set "$WLAN_IFACE" up 2>/dev/null\n' +
+    'rm -rf /data/data/com.google.android.gsf/* 2>/dev/null\n' +
+    'echo "CLEAN_DONE"\n';
+
+  const out = await runCmd(script);
+  const result = out ? String(out).trim() : '无返回';
+
+  const platform = await runCmd('getprop ro.board.platform');
+  const socMfr   = await runCmd('getprop ro.soc.manufacturer');
+  const p = String(platform || '').trim().toLowerCase();
+  const m = String(socMfr || '').trim().toLowerCase();
+
+  let tip = '';
+  if (p.startsWith('mt') || m.indexOf('mediatek') !== -1) {
+    tip = '✅ 天玑平台：无需重启';
+  } else if (p.startsWith('sm') || p.startsWith('msm') || m.indexOf('qualcomm') !== -1) {
+    tip = '⚠️ 骁龙平台：请手动重启设备后生效';
+  } else {
+    tip = '⚠️ 未识别平台，建议手动重启';
+  }
+
+  body.innerHTML =
+    '<b style="color:#3ddc84">' + escapeHtml(name) + ' 清理完成 ✅</b><br><br>' +
+    '<div style="font-size:13px;color:#ffd479;margin-top:10px">' +
+    escapeHtml(tip) +
+    '</div><br>' +
+    '<pre style="white-space:pre-wrap;font-size:12px;color:#c8f7d4;margin:0">' +
+    escapeHtml(result) + '</pre>';
+
+  addLog('清理完成：' + name + ' — ' + tip, 'w');
+}
+
+function closeCleanModal(){
+  document.getElementById('cleanMask').classList.remove('active');
+}
+
+/* ================= QQ 跳转 ================= */
+async function openQQ(){
+  addLog('执行：跳转 QQ 个人资料页');
+
+  const script =
+    'am start -a android.intent.action.VIEW -d "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=3123157507&card_type=person&source=sharecard" 2>/dev/null\n' +
+    '[ $? -ne 0 ] && am start -a android.intent.action.VIEW -d "https://wpa.qq.com/msgrd?v=3&uin=3123157507&site=qq&menu=yes" 2>/dev/null\n' +
+    'echo "QQ_OPENED"\n';
+
+  const out = await runCmd(script);
+  const result = out ? String(out).trim() : '无返回';
+
+  if (result.indexOf('QQ_OPENED') !== -1){
+    addLog('已尝试跳转 QQ 资料页', 'w');
+  } else {
+    addLog('跳转结果：' + result, 'w');
+  }
+}
+
+/* ================= 雪花 ================= */
+const canvas = document.getElementById('snow');
+const ctx = canvas.getContext('2d');
+let W, H, DPR, flakes = [];
+
+function resize(){
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = canvas.width  = innerWidth  * DPR;
+  H = canvas.height = innerHeight * DPR;
+  canvas.style.width  = innerWidth + 'px';
+  canvas.style.height = innerHeight + 'px';
+  buildFlakes();
+}
+function rand(a,b){ return a + Math.random()*(b-a); }
+
+function buildFlakes(){
+  const count = Math.round((innerWidth * innerHeight) / 20000);
+  flakes = [];
+  for(let i=0;i<count;i++) flakes.push(newFlake(true));
+}
+
+function newFlake(init){
+  const size = rand(6,14) * DPR;
+  return {
+    x: Math.random()*W,
+    y: init ? Math.random()*H : -size*2,
+    r: size,
+    vy: rand(0.25,0.85) * DPR,
+    vx: rand(-0.25,0.25) * DPR,
+    rot: Math.random()*Math.PI*2,
+    vr: rand(-0.012,0.012),
+    sway: Math.random()*Math.PI*2,
+    swaySpd: rand(0.008,0.022),
+    alpha: rand(0.45,0.95),
+    arms: 6
+  };
+}
+
+function drawFlake(f){
+  const r = f.r;
+  ctx.save();
+  ctx.translate(f.x, f.y);
+  ctx.rotate(f.rot);
+  ctx.globalAlpha = f.alpha;
+  ctx.strokeStyle = 'rgba(230,245,255,0.95)';
+  ctx.lineWidth = Math.max(1, r*0.10);
+  ctx.lineCap = 'round';
+
+  ctx.beginPath();
+  for(let i=0;i<f.arms;i++){
+    const a = (Math.PI*2/f.arms)*i;
+    const sin = Math.sin(a), cos = Math.cos(a);
+    ctx.moveTo(0,0);
+    ctx.lineTo(sin*r, -cos*r);
+    const branches = [
+      { at:-r*0.55, len:r*0.30 },
+      { at:-r*0.82, len:r*0.20 }
+    ];
+    for(let b=0;b<branches.length;b++){
+      const at  = branches[b].at;
+      const len = branches[b].len;
+      const bx = sin*at, by = -cos*at;
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx - cos*len*0.85, by - sin*len*0.85);
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + cos*len*0.85, by + sin*len*0.85);
+    }
+  }
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(0,0, Math.max(0.8, r*0.10), 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(230,245,255,0.95)';
+  ctx.fill();
+  ctx.restore();
+}
+
+function loop(){
+  ctx.clearRect(0,0,W,H);
+  for(let i=0;i<flakes.length;i++){
+    const f = flakes[i];
+    f.sway += f.swaySpd;
+    f.y += f.vy;
+    f.x += f.vx + Math.sin(f.sway) * 0.35 * DPR;
+    f.rot += f.vr;
+    if(f.y - f.r > H) Object.assign(f, newFlake(false));
+    if(f.x < -f.r*2) f.x = W + f.r;
+    if(f.x > W + f.r*2) f.x = -f.r;
+    drawFlake(f);
+  }
+  requestAnimationFrame(loop);
+}
+addEventListener('resize', resize);
+resize();
+loop();
+
+/* ================= 云更新（强制） ================= */
+const UPDATE_CONFIG = {
+  versionUrl: 'https://cdn.jsdelivr.net/gh/FXY67829/fentool-web@main/version.json',
+  localVersion: '1.0.2',
+  webrootPath: '/data/adb/modules/FenTOOLTK/webroot/index.html'
+};
+
+async function checkUpdate(){
+  try{
+    const r = await fetch(UPDATE_CONFIG.versionUrl + '?t=' + Date.now());
+    const info = await r.json();
+    if (compareVer(info.version, UPDATE_CONFIG.localVersion) > 0){
+      showUpdateSheet(info);
+    }
+  }catch(e){
+    addLog('检查更新失败：' + e.message, 'e');
+  }
+}
+
+function compareVer(a, b){
+  const x = String(a).split('.').map(n => parseInt(n) || 0);
+  const y = String(b).split('.').map(n => parseInt(n) || 0);
+  for (let i = 0; i < Math.max(x.length, y.length); i++){
+    if ((x[i]||0) > (y[i]||0)) return 1;
+    if ((x[i]||0) < (y[i]||0)) return -1;
+  }
+  return 0;
+}
+
+function showUpdateSheet(info){
+  document.getElementById('updateOldVer').textContent = UPDATE_CONFIG.localVersion;
+  document.getElementById('updateNewVer').textContent = info.version;
+  document.getElementById('updateChangelog').textContent = info.changelog || '（无更新说明）';
+  document.getElementById('updateOverlay').classList.add('active');
+
+  const btn = document.getElementById('updateBtn');
+  btn.onclick = () => doUpdate(info, btn);
+}
+
+async function doUpdate(info, btn){
+  btn.disabled = true;
+  btn.textContent = '下载中…';
+
+  try{
+    const r = await fetch(info.url + '?t=' + Date.now());
+    const html = await r.text();
+    btn.textContent = '写入中…';
+
+    const b64 = btoa(unescape(encodeURIComponent(html)));
+    const cmd = 'echo "' + b64 + '" | base64 -d > "' + UPDATE_CONFIG.webrootPath + '" && echo UPDATE_OK';
+
+    const out = await runCmd(cmd);
+    if (out && String(out).indexOf('UPDATE_OK') !== -1){
+      btn.textContent = '更新成功 ✅';
+      addLog('WebUI 已更新到 v' + info.version, 'w');
+
+      document.getElementById('updateChangelog').textContent =
+        '✅ 更新完成\n\n请关闭 WebUI 后重新打开，即可使用新版本。';
+      btn.textContent = '请关闭并重新打开 WebUI';
+      btn.style.background = 'linear-gradient(135deg,#3ddc84,#2bb86d)';
+    } else {
+      btn.textContent = '写入失败，点击重试';
+      btn.disabled = false;
+      addLog('WebUI 更新失败：' + out, 'e');
+    }
+  }catch(e){
+    btn.textContent = '下载失败，点击重试';
+    btn.disabled = false;
+    addLog('WebUI 更新失败：' + e.message, 'e');
+  }
+}
+
+window.addEventListener('load', () => {
+  setTimeout(() => checkUpdate(), 800);
+});
+</script>
+</body>
+</html>
