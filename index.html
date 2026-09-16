@@ -222,7 +222,7 @@
         <div class="status"><span class="dot"></span> 模块已加载</div>
         <p class="meta">
           作者：<b>FenXY</b><br>
-          版本：<b>v1.2.2</b><br>
+          版本：<b>.2.2</b><br>
           USB 调试：<b id="adbStatus">读取中…</b><br>
           型号：<b id="devModel">读取中…</b><br>
           Android：<b id="devAndroid">读取中…</b><br>
@@ -274,7 +274,7 @@
 
     <section id="page-about" class="page">
       <h1>关于作者</h1>
-      <div class="sub">FenTOOL ·v1.2.2</div>
+      <div class="sub">FenTOOL ·.2.2</div>
 
       <div class="card" style="text-align:center;padding:32px 18px;">
         <img src="author.png" alt="" style="width:88px;height:88px;border-radius:50%;object-fit:cover;box-shadow:0 4px 16px rgba(0,0,0,.4);margin-bottom:12px;">
@@ -960,7 +960,7 @@ async function checkUpdate(){
   try{
     const r = await fetch(UPDATE_CONFIG.versionUrl + '?t=' + Date.now());
     const info = await r.json();
-    if (compareVer(info.version, UPDATE_CONFIG.Version) > 0){
+    if (compareVer(info.version, UPDATE_CONFIG.localVersion) > 0){
       showUpdateSheet(info);
     }
   }catch(e){
